@@ -375,7 +375,7 @@
   }
 
   async function dbFetchCards() {
-    const res = await fetch(SUPA_URL + '/rest/v1/cards?select=*', { headers: supaHeaders() });
+    const res = await fetch(SUPA_URL + '/rest/v1/cards?select=*&order=created_at.asc', { headers: supaHeaders() });
     if (!res.ok) throw new Error('fetch cards failed: ' + res.status);
     return await res.json();
   }
@@ -472,6 +472,10 @@
   let importResult = null;
   let courseFilter = 'Все';
   let loadError = false;
+  let formCourse = 'Общее';
+  let formTag = 'Общее';
+  let formNewCourseMode = false;
+  let formNewTagMode = false;
 
   const root = document.getElementById('root');
 
@@ -547,6 +551,23 @@
   function courseList() {
     const set = new Set(cards.map(c => c.course || 'Общее'));
     return ['Все'].concat(Array.from(set).sort());
+  }
+
+  function tagListForCourse(course) {
+    const set = new Set(['Общее']);
+    cards.filter(c => (c.course || 'Общее') === course).forEach(c => set.add(c.tag || 'Общее'));
+    return Array.from(set).sort((a, b) => a === 'Общее' ? -1 : b === 'Общее' ? 1 : a.localeCompare(b));
+  }
+
+  function getLastChoice() {
+    try {
+      const raw = localStorage.getItem('carnet-last-choice');
+      return raw ? JSON.parse(raw) : { course: 'Общее', tag: 'Общее' };
+    } catch (e) { return { course: 'Общее', tag: 'Общее' }; }
+  }
+
+  function setLastChoice(course, tag) {
+    try { localStorage.setItem('carnet-last-choice', JSON.stringify({ course, tag })); } catch (e) {}
   }
 
   async function grade(ok) {
@@ -663,8 +684,9 @@
 
   function renderListView() {
     const s = stats();
+    const pool = courseFilter === 'Все' ? cards : cards.filter(c => (c.course || 'Общее') === courseFilter);
     const byCourse = {};
-    for (const c of cards) {
+    for (const c of pool) {
       const course = c.course || 'Общее';
       const tag = c.tag || 'без темы';
       if (!byCourse[course]) byCourse[course] = {};
@@ -707,6 +729,13 @@
       `;
     }).join('');
 
+    const allCourses = courseList();
+    const filterRow = allCourses.length > 2 ? `
+      <div class="tab-row" style="max-width:480px;margin:0 auto 18px">
+        ${allCourses.map(c => `<button class="tab-btn ${courseFilter === c ? 'active' : ''}" onclick="window.__setCourseFilter('${escapeHtml(c).replace(/'/g, "\\'")}')">${escapeHtml(c)}</button>`).join('')}
+      </div>
+    ` : '';
+
     root.innerHTML = `
       <div class="carnet-header">
         <div class="carnet-title">carnet <span>de vocabulaire</span></div>
@@ -718,6 +747,7 @@
         <div><b>${s.learned}</b>выучено</div>
         <div><b>${s.total}</b>всего</div>
       </div>
+      ${filterRow}
       <div style="max-width:480px;margin:0 auto">
         ${rows || '<div class="empty-state">Пока пусто.</div>'}
       </div>
@@ -727,13 +757,35 @@
   }
 
   function renderAddSheet() {
+    const availableCourses = courseList().filter(c => c !== 'Все');
+    const availableTags = tagListForCourse(formCourse);
+
+    const courseField = formNewCourseMode
+      ? `<div class="field"><label>Новый курс (название)</label><input id="f-course-new" placeholder="например: ИБ" autofocus /></div>`
+      : `<div class="field"><label>Курс / источник</label>
+          <select id="f-course-select" class="import-area" style="min-height:auto;padding:11px 12px" onchange="window.__courseSelectChange(this.value)">
+            ${availableCourses.map(c => `<option value="${escapeHtml(c)}" ${c === formCourse ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+            <option value="__new__">+ Новый курс</option>
+          </select>
+        </div>`;
+
+    const tagField = formNewTagMode
+      ? `<div class="field"><label>Новая тема (название)</label><input id="f-tag-new" placeholder="например: урок 3" autofocus /></div>`
+      : `<div class="field"><label>Тема / урок (внутри курса «${escapeHtml(formCourse)}»)</label>
+          <select id="f-tag-select" class="import-area" style="min-height:auto;padding:11px 12px" onchange="window.__tagSelectChange(this.value)">
+            ${availableTags.map(t => `<option value="${escapeHtml(t)}" ${t === formTag ? 'selected' : ''}>${escapeHtml(t)}</option>`).join('')}
+            <option value="__new__">+ Новая тема</option>
+          </select>
+        </div>`;
+
     const oneTab = `
       <div class="field"><label>Русский (перевод)</label><input id="f-front" placeholder="например: заканчивать" /></div>
       <div class="field"><label>Французский</label><input id="f-back" placeholder="например: finir" /></div>
       <div class="field"><label>Произношение (кириллицей)</label><input id="f-tr" placeholder="например: фини́р" /></div>
-      <div class="field"><label>Курс / источник</label><input id="f-course" placeholder="например: Попказ, ИБ, Assimil, Общее" /></div>
-      <div class="field"><label>Тема / урок</label><input id="f-tag" placeholder="например: урок 2" /></div>
+      ${courseField}
+      ${tagField}
       <button class="submit-btn" onclick="window.__submitAdd()">Добавить в карне</button>
+      ${importResult ? `<div class="import-result">${escapeHtml(importResult)}</div>` : ''}
     `;
 
     const importTab = `
@@ -791,7 +843,24 @@
   window.__flip = function () { flipped = !flipped; render(); };
   window.__setCourseFilter = function (c) { courseFilter = c; buildQueue(); render(); };
   window.__grade = function (ok) { grade(ok); };
-  window.__openAdd = function () { sheetOpen = 'add'; sheetTab = 'one'; importResult = null; render(); };
+  window.__openAdd = function () {
+    sheetOpen = 'add'; sheetTab = 'one'; importResult = null;
+    const last = getLastChoice();
+    formCourse = courseList().includes(last.course) ? last.course : (courseList().filter(c => c !== 'Все')[0] || 'Общее');
+    formTag = tagListForCourse(formCourse).includes(last.tag) ? last.tag : 'Общее';
+    formNewCourseMode = false; formNewTagMode = false;
+    render();
+  };
+  window.__courseSelectChange = function (val) {
+    if (val === '__new__') { formNewCourseMode = true; }
+    else { formCourse = val; formNewCourseMode = false; formTag = tagListForCourse(val)[0] || 'Общее'; formNewTagMode = false; }
+    render();
+  };
+  window.__tagSelectChange = function (val) {
+    if (val === '__new__') { formNewTagMode = true; }
+    else { formTag = val; formNewTagMode = false; }
+    render();
+  };
   window.__closeSheet = function () { sheetOpen = null; importResult = null; render(); };
   window.__closeSheetBg = function (e) { if (e.target.classList.contains('overlay')) { sheetOpen = null; importResult = null; render(); } };
   window.__setTab = function (t) { sheetTab = t; importResult = null; render(); };
@@ -843,15 +912,27 @@
     const front = document.getElementById('f-front').value.trim();
     const back = document.getElementById('f-back').value.trim();
     const tr = document.getElementById('f-tr').value.trim();
-    const course = document.getElementById('f-course').value.trim() || 'Общее';
-    const tag = document.getElementById('f-tag').value.trim();
-    if (!front || !back) return;
+    const course = (formNewCourseMode ? document.getElementById('f-course-new').value.trim() : formCourse) || 'Общее';
+    const tag = (formNewTagMode ? document.getElementById('f-tag-new').value.trim() : formTag) || 'Общее';
+    if (!front || !back || !course) return;
+
     const row = { id: makeId(), front, back, tr, tag, course, box: 0, next: todayISO() };
     cards.push(row);
-    try { await dbInsertCards([row]); } catch (e) { console.error(e); }
-    sheetOpen = null;
+    try { await dbInsertCards([row]); } catch (e) {
+      importResult = 'Ошибка сохранения: ' + e.message;
+      render();
+      return;
+    }
+
+    setLastChoice(course, tag);
+    formCourse = course; formTag = tag; formNewCourseMode = false; formNewTagMode = false;
+    importResult = `Добавлено: «${front}». Можно сразу добавить следующее — курс и тема остались прежними.`;
     buildQueue();
     render();
+    // clear only the word fields for fast repeated entry, keep course/tag selection
+    const fF = document.getElementById('f-front'), fB = document.getElementById('f-back'), fT = document.getElementById('f-tr');
+    if (fF) fF.value = ''; if (fB) fB.value = ''; if (fT) fT.value = '';
+    if (fF) fF.focus();
   };
 
   load();
