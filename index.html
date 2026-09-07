@@ -570,6 +570,17 @@
     try { localStorage.setItem('carnet-last-choice', JSON.stringify({ course, tag })); } catch (e) {}
   }
 
+  function getCollapsedCourses() {
+    try { return JSON.parse(localStorage.getItem('carnet-collapsed') || '[]'); } catch (e) { return []; }
+  }
+  function isCourseCollapsed(course) { return getCollapsedCourses().includes(course); }
+  function toggleCourseCollapse(course) {
+    let arr = getCollapsedCourses();
+    if (arr.includes(course)) arr = arr.filter(c => c !== course);
+    else arr.push(course);
+    try { localStorage.setItem('carnet-collapsed', JSON.stringify(arr)); } catch (e) {}
+  }
+
   async function grade(ok) {
     if (!current) return;
     let box, next;
@@ -688,43 +699,40 @@
     const byCourse = {};
     for (const c of pool) {
       const course = c.course || 'Общее';
-      const tag = c.tag || 'без темы';
-      if (!byCourse[course]) byCourse[course] = {};
-      if (!byCourse[course][tag]) byCourse[course][tag] = [];
-      byCourse[course][tag].push(c);
+      if (!byCourse[course]) byCourse[course] = [];
+      byCourse[course].push(c);
     }
     const courses = Object.keys(byCourse);
 
     const rows = courses.map(course => {
-      const tagGroups = byCourse[course];
-      const tagKeys = Object.keys(tagGroups);
-      const total = tagKeys.reduce((n, t) => n + tagGroups[t].length, 0);
+      const list = byCourse[course];
+      const collapsed = isCourseCollapsed(course);
       return `
-        <div style="margin-bottom:28px">
-          <div style="font-family:'Fraunces',serif;font-size:18px;font-weight:600;color:var(--text-light);margin-bottom:10px;border-bottom:1px solid var(--ink-2);padding-bottom:6px">
-            ${escapeHtml(course)} <span style="color:var(--text-dim);font-size:12px;font-weight:400">(${total})</span>
-          </div>
-          ${tagKeys.map(tag => `
-            <div style="margin-bottom:14px">
-              <div style="font-family:'Fraunces',serif;font-size:13px;color:var(--brass-light);margin-bottom:4px">
-                ${escapeHtml(tag)} <span style="color:var(--text-dim);font-size:11px">(${tagGroups[tag].length})</span>
-              </div>
-              <div class="deck-list">
-                ${tagGroups[tag].map(c => `
-                  <div class="deck-row">
-                    <div>
-                      <div class="ru">${escapeHtml(c.front)}</div>
-                      <div class="fr">${escapeHtml(c.back)}${c.tr ? ' · ' + escapeHtml(c.tr) : ''}</div>
-                    </div>
-                    <div style="display:flex;align-items:center;gap:10px">
-                      <div style="color:${c.box === INTERVALS.length - 1 ? 'var(--green)' : 'var(--text-dim)'};font-size:11px">${boxLabel(c.box)}</div>
-                      <button onclick="window.__deleteCard('${c.id}')" style="background:none;border:none;color:var(--text-dim);font-size:16px;cursor:pointer;line-height:1;padding:2px 4px" title="Удалить">✕</button>
-                    </div>
-                  </div>
-                `).join('')}
-              </div>
+        <div style="margin-bottom:20px">
+          <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;border-bottom:1px solid var(--ink-2);padding-bottom:6px;margin-bottom:${collapsed ? '0' : '10px'}"
+               onclick="window.__toggleCourseCollapse('${escapeHtml(course).replace(/'/g, "\\'")}')">
+            <div style="font-family:'Fraunces',serif;font-size:18px;font-weight:600;color:var(--text-light)">
+              ${escapeHtml(course)} <span style="color:var(--text-dim);font-size:12px;font-weight:400">(${list.length})</span>
             </div>
-          `).join('')}
+            <div style="color:var(--text-dim);font-size:14px">${collapsed ? '▸' : '▾'}</div>
+          </div>
+          ${collapsed ? '' : `
+            <div class="deck-list">
+              ${list.map(c => `
+                <div class="deck-row">
+                  <div>
+                    <div class="ru">${escapeHtml(c.front)}</div>
+                    <div class="fr">${escapeHtml(c.back)}${c.tr ? ' · ' + escapeHtml(c.tr) : ''}</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <span style="font-size:10px;color:var(--brass);border:1px solid var(--brass);border-radius:10px;padding:2px 8px;white-space:nowrap">${escapeHtml(c.tag || 'Общее')}</span>
+                    <div style="color:${c.box === INTERVALS.length - 1 ? 'var(--green)' : 'var(--text-dim)'};font-size:11px;white-space:nowrap">${boxLabel(c.box)}</div>
+                    <button onclick="window.__deleteCard('${c.id}')" style="background:none;border:none;color:var(--text-dim);font-size:16px;cursor:pointer;line-height:1;padding:2px 4px" title="Удалить">✕</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `}
         </div>
       `;
     }).join('');
@@ -866,6 +874,7 @@
   window.__setTab = function (t) { sheetTab = t; importResult = null; render(); };
   window.__openList = function () { sheetOpen = 'list'; render(); };
   window.__closeList = function () { sheetOpen = null; render(); };
+  window.__toggleCourseCollapse = function (course) { toggleCourseCollapse(course); render(); };
 
   window.__deleteCard = async function (id) {
     if (!confirm('Удалить эту карточку насовсем?')) return;
