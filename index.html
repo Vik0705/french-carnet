@@ -464,24 +464,12 @@
   const INTERVALS = [0, 1, 3, 7, 16]; // days, by box index 0-4
 
   const AUTO_IMPORT = [
-    { id: 'test-version-check-1', tag: 'проверка версии', course: 'Тест', words: [
-      { front: 'тестовое слово', back: 'mot test', tr: 'мо тэст' },
-    ]},
-    { id: 'test-multi-lesson-1', tag: 'урок 1', course: 'ТестУроки', words: [
-      { front: 'один (тест)', back: 'un (test)', tr: 'эн тэст' },
-    ]},
-    { id: 'test-multi-lesson-2', tag: 'урок 2', course: 'ТестУроки', words: [
-      { front: 'два (тест)', back: 'deux (test)', tr: 'дё тэст' },
-    ]},
-    { id: 'test-multi-lesson-3', tag: 'урок 3', course: 'ТестУроки', words: [
-      { front: 'три (тест)', back: 'trois (test)', tr: 'труа тэст' },
-    ]},
-    { id: 'test-popkaz-1', tag: 'урок 1', course: 'Попказ', words: [
-      { front: 'тестовое слово (Попказ)', back: 'mot test (Popkaz)', tr: 'мо тэст' },
-    ]},
-    { id: 'test-ib-1', tag: 'тема 1', course: 'ИБ', words: [
-      { front: 'тестовое слово (ИБ)', back: 'mot test (SI)', tr: 'мо тэст' },
-    ]},
+    // Место для будущих партий слов — Claude добавляет сюда новые уроки/темы,
+    // они подтянутся в базу автоматически при следующем открытии сайта.
+    // Пример формата:
+    // { id: 'urok-4-2026-09-15', tag: 'урок 4', course: 'Assimil', words: [
+    //   { front: 'открывать', back: 'ouvrir', tr: 'уврир' },
+    // ]},
   ];
 
   const STARTER = [
