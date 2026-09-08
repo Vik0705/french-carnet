@@ -8,6 +8,7 @@
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
   * { box-sizing: border-box; }
+  html, body { background: #1b2430; margin: 0; padding: 0; }
   html, body { margin: 0; padding: 0; }
 
   .carnet-root {
@@ -318,26 +319,25 @@
 
   .schedule-bar {
     max-width: 480px;
-    margin: 0 auto 18px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+    margin: 0 auto;
+    padding: 10px 16px 0;
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: #9aa4b2;
+    font-size: 10px;
+    color: #6b7383;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 4px 18px;
   }
   .schedule-row {
     display: flex;
-    justify-content: space-between;
     align-items: baseline;
-    background: #242f3f;
-    border: 1px solid #3a4658;
-    border-radius: 4px;
-    padding: 7px 12px;
+    gap: 6px;
+    white-space: nowrap;
   }
-  .schedule-row .label { color: #d4b483; font-weight: 600; }
-  .schedule-row .room { color: #6b7383; }
-  .schedule-row .countdown { color: #f2ede1; font-weight: 600; }
+  .schedule-row .label { color: #b8935f; font-weight: 600; }
+  .schedule-row .room { color: #5a6272; }
+  .schedule-row .countdown { color: #d4b483; }
 
   .import-area {
     width: 100%;
@@ -1136,8 +1136,9 @@
       const countdown = next ? formatCountdown(next) : 'пары закончились';
       return `
         <div class="schedule-row">
-          <div><span class="label">${item.label}</span> <span class="room">· ${item.room}</span></div>
-          <div class="countdown">${countdown}</div>
+          <span class="label">${item.label}</span>
+          <span class="room">${item.room}</span>
+          <span class="countdown">${countdown}</span>
         </div>
       `;
     }).join('');
