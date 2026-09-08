@@ -546,9 +546,11 @@
       let initialized = null;
       try { initialized = await dbGetMeta('initialized'); } catch (e) {}
       if (!initialized) {
-        const seedRows = STARTER.map(c => ({
+        const baseTime = Date.now();
+        const seedRows = STARTER.map((c, idx) => ({
           id: makeId(), front: c.front, back: c.back, tr: c.tr, tag: c.tag,
-          course: c.course || 'Общее', box: 0, next: todayISO()
+          course: c.course || 'Общее', box: 0, next: todayISO(),
+          created_at: new Date(baseTime + idx).toISOString()
         }));
         try {
           await dbInsertCards(seedRows);
@@ -580,7 +582,7 @@
       for (const w of batch.words) {
         const dup = cards.some(c => c.front.toLowerCase() === w.front.toLowerCase() && c.back.toLowerCase() === w.back.toLowerCase());
         if (dup) continue;
-        newRows.push({ id: makeId(), front: w.front, back: w.back, tr: w.tr || '', tag: batch.tag || '', course: batch.course || 'Общее', box: 0, next: todayISO() });
+        newRows.push({ id: makeId(), front: w.front, back: w.back, tr: w.tr || '', tag: batch.tag || '', course: batch.course || 'Общее', box: 0, next: todayISO(), created_at: new Date(Date.now() + newRows.length).toISOString() });
       }
       doneIds.push(batch.id);
     }
@@ -972,7 +974,7 @@
       const dup = cards.some(c => c.front.toLowerCase() === front.toLowerCase() && c.back.toLowerCase() === back.toLowerCase())
         || newRows.some(c => c.front.toLowerCase() === front.toLowerCase() && c.back.toLowerCase() === back.toLowerCase());
       if (dup) { skipped++; continue; }
-      newRows.push({ id: makeId(), front, back, tr, tag, course: course || 'Общее', box: 0, next: todayISO() });
+      newRows.push({ id: makeId(), front, back, tr, tag, course: course || 'Общее', box: 0, next: todayISO(), created_at: new Date(Date.now() + newRows.length).toISOString() });
     }
     return { newRows, skipped };
   }
@@ -1086,7 +1088,7 @@
     const tag = (formNewTagMode ? document.getElementById('f-tag-new').value.trim() : formTag) || 'Общее';
     if (!front || !back || !course) return;
 
-    const row = { id: makeId(), front, back, tr, tag, course, box: 0, next: todayISO() };
+    const row = { id: makeId(), front, back, tr, tag, course, box: 0, next: todayISO(), created_at: new Date().toISOString() };
     cards.push(row);
     try { await dbInsertCards([row]); } catch (e) {
       importResult = 'Ошибка сохранения: ' + e.message;
