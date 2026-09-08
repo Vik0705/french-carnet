@@ -491,7 +491,6 @@
   let importResult = null;
   let courseFilter = 'Все';
   let tagFilter = 'Все';
-  let forceReview = false;
   let loadError = false;
   let formCourse = 'Общее';
   let formTag = 'Общее';
@@ -560,11 +559,23 @@
     try { await dbSetMeta('auto_import_log', JSON.stringify(doneIds)); } catch (e) {}
   }
 
+  let isExtraMode = false;
+
   function buildQueue() {
     const t = todayISO();
     cards.forEach(c => { if (!c.course) c.course = 'Общее'; });
     const pool = filteredPool();
-    queue = forceReview ? pool.map(c => c.id) : pool.filter(c => c.next <= t).map(c => c.id);
+    const dueIds = pool.filter(c => c.next <= t).map(c => c.id);
+    if (dueIds.length) {
+      queue = dueIds;
+      isExtraMode = false;
+    } else if (pool.length) {
+      queue = pool.map(c => c.id);
+      isExtraMode = true;
+    } else {
+      queue = [];
+      isExtraMode = false;
+    }
     current = queue.length ? cards.find(c => c.id === queue[0]) : null;
     flipped = false;
   }
@@ -622,7 +633,7 @@
     current.next = next;
     dbUpdateCard(current.id, { box: box, next: next }).catch(() => {});
     current = queue.length ? cards.find(c => c.id === queue[0]) : null;
-    if (!current) forceReview = false;
+    if (!current) { /* queue exhausted */ }
     flipped = false;
     render();
   }
@@ -679,7 +690,7 @@
     if (current) {
       stage = `
         <div class="card" onclick="window.__flip()">
-          <div class="card-tag">${escapeHtml(current.course || '')} · ${escapeHtml(current.tag || '')}</div>
+          <div class="card-tag">${escapeHtml(current.course || '')} · ${escapeHtml(current.tag || '')}${isExtraMode ? ' · <span style="color:var(--brass-light)">вне графика</span>' : ''}</div>
           <div class="card-box">коробка ${current.box + 1}/5</div>
           ${flipped
             ? `<div class="card-word">${escapeHtml(current.back)}</div><div class="card-sub">${escapeHtml(current.tr || '')}</div>`
@@ -696,9 +707,8 @@
     } else {
       stage = `
         <div class="empty-state">
-          <div class="big">На сегодня всё повторено</div>
-          <div style="margin-bottom:16px">Новые карточки появятся здесь, когда подойдёт их срок — или добавь новые словом «+».</div>
-          <button class="submit-btn" style="max-width:200px" onclick="window.__startRepeat()">Повторить</button>
+          <div class="big">Здесь пока нет слов</div>
+          <div>Добавь первое словом «+».</div>
         </div>
       `;
     }
@@ -927,9 +937,8 @@
   }
 
   window.__flip = function () { flipped = !flipped; render(); };
-  window.__setCourseFilter = function (c) { courseFilter = c; tagFilter = 'Все'; forceReview = false; buildQueue(); render(); };
-  window.__setTagFilter = function (t) { tagFilter = t; forceReview = false; buildQueue(); render(); };
-  window.__startRepeat = function () { forceReview = true; buildQueue(); render(); };
+  window.__setCourseFilter = function (c) { courseFilter = c; tagFilter = 'Все'; buildQueue(); render(); };
+  window.__setTagFilter = function (t) { tagFilter = t; buildQueue(); render(); };
   window.__grade = function (ok) { grade(ok); };
   window.__openAdd = function () {
     sheetOpen = 'add'; sheetTab = 'one'; importResult = null;
