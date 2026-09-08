@@ -412,7 +412,7 @@
   }
 
   async function dbFetchCards() {
-    const res = await fetch(SUPA_URL + '/rest/v1/cards?select=*&order=created_at.asc', { headers: supaHeaders() });
+    const res = await fetch(SUPA_URL + '/rest/v1/cards?select=*&order=sort_order.asc', { headers: supaHeaders() });
     if (!res.ok) throw new Error('fetch cards failed: ' + res.status);
     return await res.json();
   }
@@ -514,6 +514,9 @@
     return d.toISOString().slice(0, 10);
   }
   function makeId() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36); }
+  function nextSortOrder() {
+    return cards.length ? Math.max(...cards.map(c => c.sort_order || 0)) + 1 : 1;
+  }
 
   let cards = [];
   let queue = [];
@@ -546,11 +549,10 @@
       let initialized = null;
       try { initialized = await dbGetMeta('initialized'); } catch (e) {}
       if (!initialized) {
-        const baseTime = Date.now();
         const seedRows = STARTER.map((c, idx) => ({
           id: makeId(), front: c.front, back: c.back, tr: c.tr, tag: c.tag,
           course: c.course || 'Общее', box: 0, next: todayISO(),
-          created_at: new Date(baseTime + idx).toISOString()
+          sort_order: idx + 1
         }));
         try {
           await dbInsertCards(seedRows);
@@ -582,7 +584,7 @@
       for (const w of batch.words) {
         const dup = cards.some(c => c.front.toLowerCase() === w.front.toLowerCase() && c.back.toLowerCase() === w.back.toLowerCase());
         if (dup) continue;
-        newRows.push({ id: makeId(), front: w.front, back: w.back, tr: w.tr || '', tag: batch.tag || '', course: batch.course || 'Общее', box: 0, next: todayISO(), created_at: new Date(Date.now() + newRows.length).toISOString() });
+        newRows.push({ id: makeId(), front: w.front, back: w.back, tr: w.tr || '', tag: batch.tag || '', course: batch.course || 'Общее', box: 0, next: todayISO(), sort_order: nextSortOrder() + newRows.length });
       }
       doneIds.push(batch.id);
     }
@@ -815,7 +817,7 @@
     const courses = Object.keys(byCourse);
 
     const rows = courses.map(course => {
-      const list = byCourse[course].slice().sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+      const list = byCourse[course].slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
       const collapsed = isCourseCollapsed(course);
       return `
         <div style="margin-bottom:20px">
@@ -974,7 +976,7 @@
       const dup = cards.some(c => c.front.toLowerCase() === front.toLowerCase() && c.back.toLowerCase() === back.toLowerCase())
         || newRows.some(c => c.front.toLowerCase() === front.toLowerCase() && c.back.toLowerCase() === back.toLowerCase());
       if (dup) { skipped++; continue; }
-      newRows.push({ id: makeId(), front, back, tr, tag, course: course || 'Общее', box: 0, next: todayISO(), created_at: new Date(Date.now() + newRows.length).toISOString() });
+      newRows.push({ id: makeId(), front, back, tr, tag, course: course || 'Общее', box: 0, next: todayISO(), sort_order: nextSortOrder() + newRows.length });
     }
     return { newRows, skipped };
   }
@@ -1021,18 +1023,18 @@
   window.__toggleCourseCollapse = function (course) { toggleCourseCollapse(course); render(); };
 
   window.__moveCard = async function (id, course, dir) {
-    const list = cards.filter(c => (c.course || 'Общее') === course).sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+    const list = cards.filter(c => (c.course || 'Общее') === course).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
     const idx = list.findIndex(c => c.id === id);
     const swapIdx = idx + dir;
     if (idx === -1 || swapIdx < 0 || swapIdx >= list.length) return;
     const a = list[idx], b = list[swapIdx];
-    const aTime = a.created_at, bTime = b.created_at;
-    a.created_at = bTime; b.created_at = aTime;
+    const aOrder = a.sort_order, bOrder = b.sort_order;
+    a.sort_order = bOrder; b.sort_order = aOrder;
     render();
     try {
       await Promise.all([
-        dbUpdateCard(a.id, { created_at: bTime }),
-        dbUpdateCard(b.id, { created_at: aTime })
+        dbUpdateCard(a.id, { sort_order: bOrder }),
+        dbUpdateCard(b.id, { sort_order: aOrder })
       ]);
     } catch (e) {
       alert('Не удалось сохранить порядок: ' + e.message);
@@ -1088,7 +1090,7 @@
     const tag = (formNewTagMode ? document.getElementById('f-tag-new').value.trim() : formTag) || 'Общее';
     if (!front || !back || !course) return;
 
-    const row = { id: makeId(), front, back, tr, tag, course, box: 0, next: todayISO(), created_at: new Date().toISOString() };
+    const row = { id: makeId(), front, back, tr, tag, course, box: 0, next: todayISO(), sort_order: nextSortOrder() };
     cards.push(row);
     try { await dbInsertCards([row]); } catch (e) {
       importResult = 'Ошибка сохранения: ' + e.message;
