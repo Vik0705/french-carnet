@@ -531,6 +531,7 @@
   }
 
   window.__retryLoad = function () { root.innerHTML = '<div class="loading">Пробую снова...</div>'; load(); };
+  window.__restartQueue = function () { buildQueue(); render(); };
 
   async function applyAutoImports() {
     if (!AUTO_IMPORT.length) return;
@@ -705,7 +706,14 @@
         ` : ''}
       `;
     } else {
-      stage = `
+      const poolLen = filteredPool().length;
+      stage = poolLen ? `
+        <div class="empty-state">
+          <div class="big">На этот заход всё пройдено</div>
+          <div style="margin-bottom:16px">Можешь пройти этот же набор ещё раз.</div>
+          <button class="submit-btn" style="max-width:200px" onclick="window.__restartQueue()">Попробовать снова</button>
+        </div>
+      ` : `
         <div class="empty-state">
           <div class="big">Здесь пока нет слов</div>
           <div>Добавь первое словом «+».</div>
