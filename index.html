@@ -316,6 +316,29 @@
 
   .filter-group { margin-bottom: 22px; }
 
+  .schedule-bar {
+    max-width: 480px;
+    margin: 0 auto 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: #9aa4b2;
+  }
+  .schedule-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    background: #242f3f;
+    border: 1px solid #3a4658;
+    border-radius: 4px;
+    padding: 7px 12px;
+  }
+  .schedule-row .label { color: #d4b483; font-weight: 600; }
+  .schedule-row .room { color: #6b7383; }
+  .schedule-row .countdown { color: #f2ede1; font-weight: 600; }
+
   .import-area {
     width: 100%;
     min-height: 140px;
@@ -366,6 +389,7 @@
 </style>
 </head>
 <body>
+<div class="schedule-bar" id="schedule-bar"></div>
 <div class="carnet-root" id="root">
   <div class="loading">Открываю карне...</div>
 </div>
@@ -1073,6 +1097,54 @@
   };
 
   load();
+
+  // ---- Class schedule countdown (independent of the main app) ----
+  const SCHEDULE = [
+    { label: 'Попказ', day: 2, hour: 14, minute: 30, room: 'ауд. 416, Остоженка д.3б', lastDate: '2026-12-29' },
+    { label: 'ИБ', day: 3, hour: 15, minute: 10, room: 'ауд. 22, Ростокинский пр-д. 13а', lastDate: '2027-01-13' }
+  ];
+
+  function nextClassDate(item) {
+    const now = new Date();
+    const last = new Date(item.lastDate + 'T23:59:59');
+    let d = new Date(now);
+    d.setHours(item.hour, item.minute, 0, 0);
+    const diffDays = (item.day - now.getDay() + 7) % 7;
+    d.setDate(now.getDate() + diffDays);
+    if (d <= now) d.setDate(d.getDate() + 7);
+    if (d > last) return null;
+    return d;
+  }
+
+  function formatCountdown(target) {
+    const ms = target - new Date();
+    if (ms <= 0) return 'сейчас';
+    const totalMin = Math.floor(ms / 60000);
+    const days = Math.floor(totalMin / (60 * 24));
+    const hours = Math.floor((totalMin % (60 * 24)) / 60);
+    const mins = totalMin % 60;
+    if (days > 0) return `через ${days}д ${hours}ч`;
+    if (hours > 0) return `через ${hours}ч ${mins}м`;
+    return `через ${mins}м`;
+  }
+
+  function renderScheduleBar() {
+    const bar = document.getElementById('schedule-bar');
+    if (!bar) return;
+    bar.innerHTML = SCHEDULE.map(item => {
+      const next = nextClassDate(item);
+      const countdown = next ? formatCountdown(next) : 'пары закончились';
+      return `
+        <div class="schedule-row">
+          <div><span class="label">${item.label}</span> <span class="room">· ${item.room}</span></div>
+          <div class="countdown">${countdown}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  renderScheduleBar();
+  setInterval(renderScheduleBar, 30000);
 })();
 </script>
 </body>
