@@ -306,6 +306,16 @@
 
   .tab-btn.active { background: var(--brass); color: var(--ink); border-color: var(--brass); font-weight: 600; }
 
+  .filter-label {
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .filter-group { margin-bottom: 22px; }
+
   .import-area {
     width: 100%;
     min-height: 140px;
@@ -553,10 +563,7 @@
   function buildQueue() {
     const t = todayISO();
     cards.forEach(c => { if (!c.course) c.course = 'Общее'; });
-    let pool = courseFilter === 'Все' ? cards : cards.filter(c => c.course === courseFilter);
-    if (courseFilter !== 'Все' && tagFilter !== 'Все') {
-      pool = pool.filter(c => (c.tag || 'Общее') === tagFilter);
-    }
+    const pool = filteredPool();
     queue = forceReview ? pool.map(c => c.id) : pool.filter(c => c.next <= t).map(c => c.id);
     current = queue.length ? cards.find(c => c.id === queue[0]) : null;
     flipped = false;
@@ -621,14 +628,23 @@
     render();
   }
 
-  function stats() {
+  function stats(pool) {
     const t = todayISO();
+    const p = pool || cards;
     return {
-      due: cards.filter(c => c.next <= t).length,
-      novye: cards.filter(c => c.box === 0).length,
-      learned: cards.filter(c => c.box === INTERVALS.length - 1).length,
-      total: cards.length
+      due: p.filter(c => c.next <= t).length,
+      novye: p.filter(c => c.box === 0).length,
+      learned: p.filter(c => c.box === INTERVALS.length - 1).length,
+      total: p.length
     };
+  }
+
+  function filteredPool() {
+    let pool = courseFilter === 'Все' ? cards : cards.filter(c => c.course === courseFilter);
+    if (courseFilter !== 'Все' && tagFilter !== 'Все') {
+      pool = pool.filter(c => (c.tag || 'Общее') === tagFilter);
+    }
+    return pool;
   }
 
   function escapeHtml(s) {
@@ -658,7 +674,7 @@
 
     if (sheetOpen === 'list') { renderListView(); return; }
 
-    const s = stats();
+    const s = stats(filteredPool());
 
     let stage = '';
     if (current) {
@@ -690,8 +706,11 @@
 
     const courses = courseList();
     const filterRow = courses.length > 2 ? `
-      <div class="tab-row" style="max-width:480px;margin:0 auto 18px">
-        ${courses.map(c => `<button class="tab-btn ${courseFilter === c ? 'active' : ''}" onclick="window.__setCourseFilter('${escapeHtml(c).replace(/'/g, "\\'")}')">${escapeHtml(c)}</button>`).join('')}
+      <div class="filter-group" style="max-width:480px;margin:0 auto 22px">
+        <div class="filter-label">Курс / пособие</div>
+        <div class="tab-row" style="margin-bottom:0">
+          ${courses.map(c => `<button class="tab-btn ${courseFilter === c ? 'active' : ''}" onclick="window.__setCourseFilter('${escapeHtml(c).replace(/'/g, "\\'")}')">${escapeHtml(c)}</button>`).join('')}
+        </div>
       </div>
     ` : '';
 
@@ -700,8 +719,11 @@
       const tags = tagListForCourse(courseFilter);
       if (tags.length > 1) {
         tagFilterRow = `
-          <div class="tab-row" style="max-width:480px;margin:0 auto 18px">
-            ${['Все'].concat(tags).map(t => `<button class="tab-btn ${tagFilter === t ? 'active' : ''}" onclick="window.__setTagFilter('${escapeHtml(t).replace(/'/g, "\\'")}')">${escapeHtml(t)}</button>`).join('')}
+          <div class="filter-group" style="max-width:480px;margin:0 auto 22px">
+            <div class="filter-label">Урок / тема</div>
+            <div class="tab-row" style="margin-bottom:0">
+              ${['Все уроки'].concat(tags).map(t => `<button class="tab-btn ${(tagFilter === t || (tagFilter === 'Все' && t === 'Все уроки')) ? 'active' : ''}" onclick="window.__setTagFilter('${t === 'Все уроки' ? 'Все' : escapeHtml(t).replace(/'/g, "\\'")}')">${escapeHtml(t)}</button>`).join('')}
+            </div>
           </div>
         `;
       }
@@ -727,7 +749,7 @@
   }
 
   function renderListView() {
-    const s = stats();
+    const s = stats(filteredPool());
     let pool = courseFilter === 'Все' ? cards : cards.filter(c => (c.course || 'Общее') === courseFilter);
     if (courseFilter !== 'Все' && tagFilter !== 'Все') {
       pool = pool.filter(c => (c.tag || 'Общее') === tagFilter);
@@ -777,8 +799,11 @@
 
     const allCourses = courseList();
     const filterRow = allCourses.length > 2 ? `
-      <div class="tab-row" style="max-width:480px;margin:0 auto 18px">
-        ${allCourses.map(c => `<button class="tab-btn ${courseFilter === c ? 'active' : ''}" onclick="window.__setCourseFilter('${escapeHtml(c).replace(/'/g, "\\'")}')">${escapeHtml(c)}</button>`).join('')}
+      <div class="filter-group" style="max-width:480px;margin:0 auto 22px">
+        <div class="filter-label">Курс / пособие</div>
+        <div class="tab-row" style="margin-bottom:0">
+          ${allCourses.map(c => `<button class="tab-btn ${courseFilter === c ? 'active' : ''}" onclick="window.__setCourseFilter('${escapeHtml(c).replace(/'/g, "\\'")}')">${escapeHtml(c)}</button>`).join('')}
+        </div>
       </div>
     ` : '';
 
@@ -787,8 +812,11 @@
       const tags = tagListForCourse(courseFilter);
       if (tags.length > 1) {
         tagFilterRowList = `
-          <div class="tab-row" style="max-width:480px;margin:0 auto 18px">
-            ${['Все'].concat(tags).map(t => `<button class="tab-btn ${tagFilter === t ? 'active' : ''}" onclick="window.__setTagFilter('${escapeHtml(t).replace(/'/g, "\\'")}')">${escapeHtml(t)}</button>`).join('')}
+          <div class="filter-group" style="max-width:480px;margin:0 auto 22px">
+            <div class="filter-label">Урок / тема</div>
+            <div class="tab-row" style="margin-bottom:0">
+              ${['Все уроки'].concat(tags).map(t => `<button class="tab-btn ${(tagFilter === t || (tagFilter === 'Все' && t === 'Все уроки')) ? 'active' : ''}" onclick="window.__setTagFilter('${t === 'Все уроки' ? 'Все' : escapeHtml(t).replace(/'/g, "\\'")}')">${escapeHtml(t)}</button>`).join('')}
+            </div>
           </div>
         `;
       }
