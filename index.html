@@ -430,6 +430,15 @@
     { id: 'test-version-check-1', tag: 'проверка версии', course: 'Тест', words: [
       { front: 'тестовое слово', back: 'mot test', tr: 'мо тэст' },
     ]},
+    { id: 'test-multi-lesson-1', tag: 'урок 1', course: 'ТестУроки', words: [
+      { front: 'один (тест)', back: 'un (test)', tr: 'эн тэст' },
+    ]},
+    { id: 'test-multi-lesson-2', tag: 'урок 2', course: 'ТестУроки', words: [
+      { front: 'два (тест)', back: 'deux (test)', tr: 'дё тэст' },
+    ]},
+    { id: 'test-multi-lesson-3', tag: 'урок 3', course: 'ТестУроки', words: [
+      { front: 'три (тест)', back: 'trois (test)', tr: 'труа тэст' },
+    ]},
   ];
 
   const STARTER = [
@@ -471,6 +480,8 @@
   let sheetTab = 'one'; // 'one' | 'import'
   let importResult = null;
   let courseFilter = 'Все';
+  let tagFilter = 'Все';
+  let forceReview = false;
   let loadError = false;
   let formCourse = 'Общее';
   let formTag = 'Общее';
@@ -542,8 +553,11 @@
   function buildQueue() {
     const t = todayISO();
     cards.forEach(c => { if (!c.course) c.course = 'Общее'; });
-    const pool = courseFilter === 'Все' ? cards : cards.filter(c => c.course === courseFilter);
-    queue = pool.filter(c => c.next <= t).map(c => c.id);
+    let pool = courseFilter === 'Все' ? cards : cards.filter(c => c.course === courseFilter);
+    if (courseFilter !== 'Все' && tagFilter !== 'Все') {
+      pool = pool.filter(c => (c.tag || 'Общее') === tagFilter);
+    }
+    queue = forceReview ? pool.map(c => c.id) : pool.filter(c => c.next <= t).map(c => c.id);
     current = queue.length ? cards.find(c => c.id === queue[0]) : null;
     flipped = false;
   }
@@ -554,9 +568,13 @@
   }
 
   function tagListForCourse(course) {
-    const set = new Set(['Общее']);
-    cards.filter(c => (c.course || 'Общее') === course).forEach(c => set.add(c.tag || 'Общее'));
-    return Array.from(set).sort((a, b) => a === 'Общее' ? -1 : b === 'Общее' ? 1 : a.localeCompare(b));
+    const seen = [];
+    cards.filter(c => (c.course || 'Общее') === course).forEach(c => {
+      const t = c.tag || 'Общее';
+      if (!seen.includes(t)) seen.push(t);
+    });
+    const withoutObschee = seen.filter(t => t !== 'Общее');
+    return ['Общее'].concat(withoutObschee);
   }
 
   function getLastChoice() {
@@ -598,6 +616,7 @@
     current.next = next;
     dbUpdateCard(current.id, { box: box, next: next }).catch(() => {});
     current = queue.length ? cards.find(c => c.id === queue[0]) : null;
+    if (!current) forceReview = false;
     flipped = false;
     render();
   }
@@ -663,7 +682,8 @@
       stage = `
         <div class="empty-state">
           <div class="big">На сегодня всё повторено</div>
-          <div>Новые карточки появятся здесь, когда подойдёт их срок — или добавь новые словом «+».</div>
+          <div style="margin-bottom:16px">Новые карточки появятся здесь, когда подойдёт их срок — или добавь новые словом «+».</div>
+          <button class="submit-btn" style="max-width:200px" onclick="window.__startRepeat()">Повторить</button>
         </div>
       `;
     }
@@ -674,6 +694,18 @@
         ${courses.map(c => `<button class="tab-btn ${courseFilter === c ? 'active' : ''}" onclick="window.__setCourseFilter('${escapeHtml(c).replace(/'/g, "\\'")}')">${escapeHtml(c)}</button>`).join('')}
       </div>
     ` : '';
+
+    let tagFilterRow = '';
+    if (courseFilter !== 'Все') {
+      const tags = tagListForCourse(courseFilter);
+      if (tags.length > 1) {
+        tagFilterRow = `
+          <div class="tab-row" style="max-width:480px;margin:0 auto 18px">
+            ${['Все'].concat(tags).map(t => `<button class="tab-btn ${tagFilter === t ? 'active' : ''}" onclick="window.__setTagFilter('${escapeHtml(t).replace(/'/g, "\\'")}')">${escapeHtml(t)}</button>`).join('')}
+          </div>
+        `;
+      }
+    }
 
     root.innerHTML = `
       <div class="carnet-header">
@@ -687,6 +719,7 @@
         <div><b>${s.total}</b>всего</div>
       </div>
       ${filterRow}
+      ${tagFilterRow}
       <div class="stage">${stage}</div>
       <button class="fab" onclick="window.__openAdd()">+</button>
       ${sheetOpen === 'add' ? renderAddSheet() : ''}
@@ -695,7 +728,10 @@
 
   function renderListView() {
     const s = stats();
-    const pool = courseFilter === 'Все' ? cards : cards.filter(c => (c.course || 'Общее') === courseFilter);
+    let pool = courseFilter === 'Все' ? cards : cards.filter(c => (c.course || 'Общее') === courseFilter);
+    if (courseFilter !== 'Все' && tagFilter !== 'Все') {
+      pool = pool.filter(c => (c.tag || 'Общее') === tagFilter);
+    }
     const byCourse = {};
     for (const c of pool) {
       const course = c.course || 'Общее';
@@ -705,7 +741,7 @@
     const courses = Object.keys(byCourse);
 
     const rows = courses.map(course => {
-      const list = byCourse[course];
+      const list = byCourse[course].slice().sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
       const collapsed = isCourseCollapsed(course);
       return `
         <div style="margin-bottom:20px">
@@ -718,15 +754,17 @@
           </div>
           ${collapsed ? '' : `
             <div class="deck-list">
-              ${list.map(c => `
+              ${list.map((c, i) => `
                 <div class="deck-row">
                   <div>
                     <div class="ru">${escapeHtml(c.front)}</div>
                     <div class="fr">${escapeHtml(c.back)}${c.tr ? ' · ' + escapeHtml(c.tr) : ''}</div>
                   </div>
-                  <div style="display:flex;align-items:center;gap:8px">
+                  <div style="display:flex;align-items:center;gap:6px">
                     <span style="font-size:10px;color:var(--brass);border:1px solid var(--brass);border-radius:10px;padding:2px 8px;white-space:nowrap">${escapeHtml(c.tag || 'Общее')}</span>
                     <div style="color:${c.box === INTERVALS.length - 1 ? 'var(--green)' : 'var(--text-dim)'};font-size:11px;white-space:nowrap">${boxLabel(c.box)}</div>
+                    <button onclick="window.__moveCard('${c.id}','${course.replace(/'/g, "\\'")}',-1)" ${i === 0 ? 'disabled style="opacity:0.25;background:none;border:none;font-size:14px;cursor:default;padding:2px 3px"' : 'style="background:none;border:none;color:var(--text-dim);font-size:14px;cursor:pointer;padding:2px 3px"'} title="Выше">↑</button>
+                    <button onclick="window.__moveCard('${c.id}','${course.replace(/'/g, "\\'")}',1)" ${i === list.length - 1 ? 'disabled style="opacity:0.25;background:none;border:none;font-size:14px;cursor:default;padding:2px 3px"' : 'style="background:none;border:none;color:var(--text-dim);font-size:14px;cursor:pointer;padding:2px 3px"'} title="Ниже">↓</button>
                     <button onclick="window.__deleteCard('${c.id}')" style="background:none;border:none;color:var(--text-dim);font-size:16px;cursor:pointer;line-height:1;padding:2px 4px" title="Удалить">✕</button>
                   </div>
                 </div>
@@ -744,6 +782,18 @@
       </div>
     ` : '';
 
+    let tagFilterRowList = '';
+    if (courseFilter !== 'Все') {
+      const tags = tagListForCourse(courseFilter);
+      if (tags.length > 1) {
+        tagFilterRowList = `
+          <div class="tab-row" style="max-width:480px;margin:0 auto 18px">
+            ${['Все'].concat(tags).map(t => `<button class="tab-btn ${tagFilter === t ? 'active' : ''}" onclick="window.__setTagFilter('${escapeHtml(t).replace(/'/g, "\\'")}')">${escapeHtml(t)}</button>`).join('')}
+          </div>
+        `;
+      }
+    }
+
     root.innerHTML = `
       <div class="carnet-header">
         <div class="carnet-title">carnet <span>de vocabulaire</span></div>
@@ -756,6 +806,7 @@
         <div><b>${s.total}</b>всего</div>
       </div>
       ${filterRow}
+      ${tagFilterRowList}
       <div style="max-width:480px;margin:0 auto">
         ${rows || '<div class="empty-state">Пока пусто.</div>'}
       </div>
@@ -849,7 +900,9 @@
   }
 
   window.__flip = function () { flipped = !flipped; render(); };
-  window.__setCourseFilter = function (c) { courseFilter = c; buildQueue(); render(); };
+  window.__setCourseFilter = function (c) { courseFilter = c; tagFilter = 'Все'; forceReview = false; buildQueue(); render(); };
+  window.__setTagFilter = function (t) { tagFilter = t; forceReview = false; buildQueue(); render(); };
+  window.__startRepeat = function () { forceReview = true; buildQueue(); render(); };
   window.__grade = function (ok) { grade(ok); };
   window.__openAdd = function () {
     sheetOpen = 'add'; sheetTab = 'one'; importResult = null;
@@ -875,6 +928,25 @@
   window.__openList = function () { sheetOpen = 'list'; render(); };
   window.__closeList = function () { sheetOpen = null; render(); };
   window.__toggleCourseCollapse = function (course) { toggleCourseCollapse(course); render(); };
+
+  window.__moveCard = async function (id, course, dir) {
+    const list = cards.filter(c => (c.course || 'Общее') === course).sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+    const idx = list.findIndex(c => c.id === id);
+    const swapIdx = idx + dir;
+    if (idx === -1 || swapIdx < 0 || swapIdx >= list.length) return;
+    const a = list[idx], b = list[swapIdx];
+    const aTime = a.created_at, bTime = b.created_at;
+    a.created_at = bTime; b.created_at = aTime;
+    render();
+    try {
+      await Promise.all([
+        dbUpdateCard(a.id, { created_at: bTime }),
+        dbUpdateCard(b.id, { created_at: aTime })
+      ]);
+    } catch (e) {
+      alert('Не удалось сохранить порядок: ' + e.message);
+    }
+  };
 
   window.__deleteCard = async function (id) {
     if (!confirm('Удалить эту карточку насовсем?')) return;
