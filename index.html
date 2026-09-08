@@ -580,8 +580,7 @@
       const t = c.tag || 'Общее';
       if (!seen.includes(t)) seen.push(t);
     });
-    const withoutObschee = seen.filter(t => t !== 'Общее');
-    return ['Общее'].concat(withoutObschee);
+    return seen;
   }
 
   function getLastChoice() {
@@ -936,13 +935,25 @@
     sheetOpen = 'add'; sheetTab = 'one'; importResult = null;
     const last = getLastChoice();
     formCourse = courseList().includes(last.course) ? last.course : (courseList().filter(c => c !== 'Все')[0] || 'Общее');
-    formTag = tagListForCourse(formCourse).includes(last.tag) ? last.tag : 'Общее';
-    formNewCourseMode = false; formNewTagMode = false;
+    const tagsForCourse = tagListForCourse(formCourse);
+    if (tagsForCourse.includes(last.tag)) {
+      formTag = last.tag; formNewTagMode = false;
+    } else if (tagsForCourse.length) {
+      formTag = tagsForCourse[0]; formNewTagMode = false;
+    } else {
+      formTag = ''; formNewTagMode = true;
+    }
+    formNewCourseMode = false;
     render();
   };
   window.__courseSelectChange = function (val) {
     if (val === '__new__') { formNewCourseMode = true; }
-    else { formCourse = val; formNewCourseMode = false; formTag = tagListForCourse(val)[0] || 'Общее'; formNewTagMode = false; }
+    else {
+      formCourse = val; formNewCourseMode = false;
+      const tagsForCourse = tagListForCourse(val);
+      if (tagsForCourse.length) { formTag = tagsForCourse[0]; formNewTagMode = false; }
+      else { formTag = ''; formNewTagMode = true; }
+    }
     render();
   };
   window.__tagSelectChange = function (val) {
